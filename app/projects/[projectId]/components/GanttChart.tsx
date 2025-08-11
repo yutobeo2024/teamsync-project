@@ -261,9 +261,3 @@ const GanttChart: React.FC<GanttChartProps> = ({
 };
 
 export default GanttChart;
-styles: {
-  barProgressColor: getProgressColor(task.status),
-  barProgressSelectedColor: getProgressSelectedColor(task.status),
-  barBackgroundColor: getBackgroundColor(task.status),
-  barBackgroundSelectedColor: getBackgroundSelectedColor(task.status),
-},
