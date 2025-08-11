@@ -55,10 +55,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
         progress: Math.min(Math.max(task.progress || 0, 0), 100), // Ensure progress is between 0-100
         isDisabled: false,
         styles: {
-          progressColor: getProgressColor(task.status),
-          progressSelectedColor: getProgressSelectedColor(task.status),
-          backgroundColor: getBackgroundColor(task.status),
-          backgroundSelectedColor: getBackgroundSelectedColor(task.status),
+          barProgressColor: getProgressColor(task.status),
+          barProgressSelectedColor: getProgressSelectedColor(task.status),
+          barBackgroundColor: getBackgroundColor(task.status),
+          barBackgroundSelectedColor: getBackgroundSelectedColor(task.status),
         },
       };
     });
@@ -261,3 +261,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
 };
 
 export default GanttChart;
+styles: {
+  barProgressColor: getProgressColor(task.status),
+  barProgressSelectedColor: getProgressSelectedColor(task.status),
+  barBackgroundColor: getBackgroundColor(task.status),
+  barBackgroundSelectedColor: getBackgroundSelectedColor(task.status),
+},
