@@ -222,12 +222,11 @@ export default function CreateProjectPage() {
     return null;
   }
 
-  if (session.user.role !== "Admin") {
+  if (!(session.user as any)?.role || (session.user as any).role !== "Admin") {
     return (
       <div style={{ maxWidth: 600, margin: "auto", padding: 32 }}>
         <h2>Access Denied</h2>
-        <p>Only administrators can create projects.</p>
-        <a href="/dashboard">Back to Dashboard</a>
+        <p>You do not have permission to create projects.</p>
       </div>
     );
   }

@@ -2,6 +2,8 @@ import { google } from "googleapis";
 import bcrypt from "bcryptjs";
 import path from "path";
 import { promises as fs } from "fs";
+import { OAuth2Client } from "google-auth-library";
+import { JWT } from "google-auth-library";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 const OAUTH_SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.readonly"];
@@ -14,14 +16,25 @@ if (!USERS_SHEET_ID) {
 }
 
 async function getGoogleAuth() {
-  const credentialsPath = path.join(process.cwd(), "credentials.json");
-  const content = await fs.readFile(credentialsPath, "utf8");
-  const credentials = JSON.parse(content);
-  
-  const auth = google.auth.fromJSON(credentials);
-  auth.scopes = SCOPES;
-  
-  return auth;
+  const envCreds = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  let credentials: any;
+  if (envCreds) {
+    try {
+      credentials = JSON.parse(envCreds);
+    } catch (e) {
+      throw new Error("Invalid GOOGLE_SERVICE_ACCOUNT_JSON. Must be valid JSON string.");
+    }
+  } else {
+    const credentialsPath = path.join(process.cwd(), "credentials.json");
+    const content = await fs.readFile(credentialsPath, "utf8");
+    credentials = JSON.parse(content);
+  }
+  const jwtClient = new JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: SCOPES,
+  });
+  return jwtClient;
 }
 
 export async function getUsersFromSheet() {
@@ -206,7 +219,7 @@ export async function getProjectsFromSheet() {
   await ensureProjectsSheetExists();
   
   const auth = await getGoogleAuth();
-  const sheets = google.sheets({ version: "v4", auth });
+  const sheets = google.sheets({ version: "v4", auth: auth as OAuth2Client });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: USERS_SHEET_ID,
     range: `${PROJECTS_SHEET_NAME}!A1:F`,

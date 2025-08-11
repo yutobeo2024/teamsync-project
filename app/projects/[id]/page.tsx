@@ -93,13 +93,57 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  const fetchTasks = async () => {
+  const [accessToken, setAccessToken] = useState("");
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  
+  const handleGoogleAuth = async () => {
+    try {
+      const response = await fetch("/api/google-oauth/auth");
+      const data = await response.json();
+      if (data.authUrl) {
+        window.open(data.authUrl, "google-auth", "width=500,height=600");
+        window.addEventListener("message", handleAuthCallback);
+      }
+    } catch (e) {
+      showError("Failed to initiate Google authentication");
+    }
+  };
+  
+  const handleAuthCallback = async (event: MessageEvent) => {
+    if (event.origin !== window.location.origin) return;
+    if (event.data.type === "GOOGLE_AUTH_SUCCESS") {
+      const { code } = event.data;
+      try {
+        const response = await fetch("/api/google-oauth/callback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          setAccessToken(data.accessToken);
+          setIsGoogleConnected(true);
+          await fetchTasks(data.accessToken);
+          showSuccess("Google connected");
+        } else {
+          showError("Failed to authenticate with Google");
+        }
+      } catch (e) {
+        showError("Failed to process authentication");
+      }
+      window.removeEventListener("message", handleAuthCallback);
+    }
+  };
+  
+  // Modify fetchTasks to take optional token
+  const fetchTasks = async (tokenOverride?: string) => {
     setTasksLoading(true);
     setTasksError("");
     try {
-      const response = await fetch(`/api/projects/${params.id}/tasks`);
+      const token = tokenOverride || accessToken;
+      const url = token ? `/api/projects/${params.id}/tasks?accessToken=${encodeURIComponent(token)}` : `/api/projects/${params.id}/tasks`;
+      const response = await fetch(url);
       const data = await response.json();
-      
       if (response.ok) {
         setTasks(data.tasks || []);
         setColumns(data.columns || ['To Do', 'In Progress', 'Done']);
@@ -113,22 +157,37 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  if (status === "loading" || loading) {
-    return <div style={{ padding: 32 }}>Loading...</div>;
-  }
+  // Helper function to merge updated task
+  const mergeUpdatedTask = (currentTasks: Task[], updatedTask: Task) => {
+    return currentTasks.map((task) =>
+      task.id === updatedTask.id ? updatedTask : task
+    );
+  };
 
-  if (!session) {
-    return null;
+  if (loading) {
+    return (
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center", 
+        height: "50vh",
+        flexDirection: "column" 
+      }}>
+        <div style={{ fontSize: "24px", marginBottom: "16px" }}>⏳</div>
+        <p style={{ color: "#6c757d" }}>Loading project...</p>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div style={{ maxWidth: 800, margin: "auto", padding: 32 }}>
-        <div style={{ color: "red", marginBottom: 16 }}>{error}</div>
+      <div style={{ textAlign: "center", padding: "64px 32px" }}>
+        <div style={{ fontSize: "24px", marginBottom: "16px", color: "#dc3545" }}>❌</div>
+        <p style={{ color: "#dc3545", marginBottom: "24px" }}>{error}</p>
         <button
           onClick={() => router.push("/dashboard")}
           style={{
-            padding: "8px 16px",
+            padding: "12px 24px",
             backgroundColor: "#6c757d",
             color: "white",
             border: "none",
@@ -143,63 +202,37 @@ export default function ProjectDetailsPage() {
   }
 
   if (!project) {
-    return (
-      <div style={{ maxWidth: 800, margin: "auto", padding: 32 }}>
-        <div>Project not found</div>
-        <button
-          onClick={() => router.push("/dashboard")}
-          style={{
-            padding: "8px 16px",
-            backgroundColor: "#6c757d",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            marginTop: 16
-          }}
-        >
-          Back to Dashboard
-        </button>
-      </div>
-    );
+    return null;
   }
 
-  // Helper to merge updated task into list
-  const mergeUpdatedTask = (list: Task[], updated: Task) =>
-    list.map((t) => (t.id === updated.id ? { ...t, ...updated } : t));
-
   return (
-    <div style={{ maxWidth: "100%", margin: "auto", padding: 32 }}>
-      {/* Notification Toast */}
+    <div style={{ padding: "32px", backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      {/* Notification */}
       {notification && (
         <div
-          role="status"
-          aria-live="polite"
           style={{
-            position: "fixed",
-            top: 16,
-            right: 16,
-            zIndex: 2000,
-            padding: "12px 16px",
-            borderRadius: 8,
-            border: `1px solid ${notification.type === 'error' ? '#f5c6cb' : '#c3e6cb'}`,
-            backgroundColor: notification.type === 'error' ? '#f8d7da' : '#d4edda',
-            color: notification.type === 'error' ? '#721c24' : '#155724',
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            maxWidth: 360
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: 1000,
+            padding: '12px 20px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            backgroundColor: notification.type === 'success' ? '#d4edda' : '#f8d7da',
+            color: notification.type === 'success' ? '#155724' : '#721c24',
+            border: `1px solid ${notification.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
           }}
         >
           {notification.message}
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, flexWrap: "wrap", gap: "16px" }}>
-        <div>
-          <h1 style={{ margin: 0, marginBottom: 8 }}>{project.projectName}</h1>
-          <p style={{ margin: 0, color: "#6c757d", fontSize: 14 }}>
-            {tasks.length} tasks • Last updated: {new Date().toLocaleDateString()}
-          </p>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+          <h1 style={{ margin: 0, color: "#343a40" }}>{project.projectName}</h1>
         </div>
+        
         <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           {/* View Mode Toggle */}
           <div style={{ display: "flex", border: "1px solid #dee2e6", borderRadius: 4, overflow: "hidden" }}>
@@ -231,6 +264,23 @@ export default function ProjectDetailsPage() {
               Gantt
             </button>
           </div>
+
+          {!accessToken && (
+            <button
+              onClick={handleGoogleAuth}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#db4437",
+                color: "white",
+                border: "none",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontSize: 14
+              }}
+            >
+              Connect Google
+            </button>
+          )}
           
           <button
             onClick={() => setShowProjectInfo(!showProjectInfo)}
@@ -247,7 +297,7 @@ export default function ProjectDetailsPage() {
             {showProjectInfo ? "Hide" : "Show"} Project Info
           </button>
           <button
-            onClick={fetchTasks}
+            onClick={() => (accessToken ? fetchTasks() : handleGoogleAuth())}
             disabled={tasksLoading}
             style={{
               padding: "8px 16px",
@@ -277,7 +327,7 @@ export default function ProjectDetailsPage() {
           </button>
         </div>
       </div>
-      
+
       {showProjectInfo && (
         <div style={{ marginBottom: 32 }}>
           <div style={{ 
@@ -376,7 +426,7 @@ export default function ProjectDetailsPage() {
           </div>
         </div>
       )}
-      
+
       {/* Kanban Board Section */}
       <div style={{ 
         backgroundColor: "white", 
@@ -418,6 +468,7 @@ export default function ProjectDetailsPage() {
                   setSelectedTask(task);
                   setIsTaskModalOpen(true);
                 }}
+                accessToken={accessToken}
               />
             ) : (
               <GanttChart 
@@ -463,6 +514,7 @@ export default function ProjectDetailsPage() {
             assigneeEmail: updatedTask.assigneeEmail,
             newStatus: updatedTask.status,
             dueDate: updatedTask.dueDate,
+            accessToken,
           };
           if (updatedTask.startDate) payload.startDate = updatedTask.startDate;
           if (typeof updatedTask.progress === 'number') payload.progress = updatedTask.progress;

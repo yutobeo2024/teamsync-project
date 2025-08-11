@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../auth/[...nextauth]/route";
+
 import { getProjectsFromSheet, getOAuth2Client } from "@/lib/googleSheetsAuth";
 import { google } from "googleapis";
 
@@ -16,30 +16,34 @@ interface Task {
   rowIndex: number;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { projectId: string } }) {
-  const session = await getServerSession(authOptions);
+export async function GET(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+  const session = await getServerSession();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { projectId } = await params;
+
   try {
+    // Get accessToken from query params for GET requests
+    const { searchParams } = new URL(req.url);
+    const accessToken = searchParams.get('accessToken');
+    
+    if (!accessToken) {
+      return NextResponse.json({ error: "Google OAuth token is required. Please provide accessToken parameter." }, { status: 401 });
+    }
+
     // Verify user has access to this project
     const projects = await getProjectsFromSheet();
-    const project = projects.find(p => p.projectId === params.projectId);
+    const project = projects.find(p => p.projectId === projectId);
     
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     // Check if user has access to this project (creator or admin)
-    if (project.createdBy !== session.user.email && session.user.role !== "Admin") {
+    if (project.createdBy !== session.user.email && (session.user as any).role !== "Admin") {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
-
-    // Get user's OAuth tokens from session
-    const accessToken = session.accessToken;
-    if (!accessToken) {
-      return NextResponse.json({ error: "Google OAuth token not found. Please reconnect your Google account." }, { status: 401 });
     }
 
     // Read tasks from the linked Google Sheet
@@ -83,17 +87,23 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { projectId: string } }) {
-  const session = await getServerSession(authOptions);
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+  const session = await getServerSession();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { projectId } = await params;
+
   try {
-    const { taskId, newStatus, taskName, description, assigneeEmail, dueDate, startDate, progress } = await req.json();
+    const { taskId, newStatus, taskName, description, assigneeEmail, dueDate, startDate, progress, accessToken } = await req.json();
     
     if (!taskId) {
       return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
+    }
+    
+    if (!accessToken) {
+      return NextResponse.json({ error: "Google OAuth token is required. Please provide accessToken in request body." }, { status: 401 });
     }
     
     // At least one field to update must be provided
@@ -123,21 +133,15 @@ export async function PUT(req: NextRequest, { params }: { params: { projectId: s
 
     // Verify user has access to this project
     const projects = await getProjectsFromSheet();
-    const project = projects.find(p => p.projectId === params.projectId);
+    const project = projects.find(p => p.projectId === projectId);
     
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     // Check if user has access to this project
-    if (project.createdBy !== session.user.email && session.user.role !== "Admin") {
+    if (project.createdBy !== session.user.email && (session.user as any).role !== "Admin") {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
-
-    // Get user's OAuth tokens from session
-    const accessToken = session.accessToken;
-    if (!accessToken) {
-      return NextResponse.json({ error: "Google OAuth token not found. Please reconnect your Google account." }, { status: 401 });
     }
 
     // Update task status in Google Sheet

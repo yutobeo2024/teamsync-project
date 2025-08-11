@@ -73,25 +73,25 @@ export default function Dashboard() {
       
       <div style={{ marginBottom: 32 }}>
         <p>Welcome, {session.user?.name || session.user?.email}!</p>
-        <p>Role: {session.user?.role}</p>
+        <p>Role: {(session.user as any)?.role}</p>
       </div>
       
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2>Projects</h2>
-          {session.user?.role === "Admin" && (
+          {(session.user as any)?.role === "Admin" && (
             <button
               onClick={() => router.push("/projects/create")}
               style={{
-                padding: "8px 16px",
-                backgroundColor: "#007bff",
+                background: "#0070f3",
                 color: "white",
                 border: "none",
                 borderRadius: 4,
-                cursor: "pointer"
+                padding: "8px 16px",
+                cursor: "pointer",
               }}
             >
-              Create New Project
+              Create Project
             </button>
           )}
         </div>
@@ -110,7 +110,7 @@ export default function Dashboard() {
           }}>
             <h3>No Projects Yet</h3>
             <p>Get started by creating your first project.</p>
-            {session.user?.role === "Admin" && (
+            {(session.user as any)?.role === "Admin" && (
               <button
                 onClick={() => router.push("/projects/create")}
                 style={{
