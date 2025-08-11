@@ -20,6 +20,7 @@ interface GanttChartProps {
   onTaskChange?: (task: GanttTask) => void;
   onProgressChange?: (task: GanttTask) => void;
   onDateChange?: (task: GanttTask) => void;
+  onTaskClick?: (task: Task) => void;
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({
@@ -27,6 +28,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   onTaskChange,
   onProgressChange,
   onDateChange,
+  onTaskClick,
 }) => {
   const ganttTasks: GanttTask[] = useMemo(() => {
     return tasks.map((task) => {
@@ -238,7 +240,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
         viewMode={ViewMode.Day}
         onDateChange={handleDateChange}
         onProgressChange={handleProgressChange}
-        onDoubleClick={handleTaskChange}
+        onDoubleClick={(ganttTask) => {
+          handleTaskChange(ganttTask);
+          if (onTaskClick) {
+            const originalTask = tasks.find(t => t.id === ganttTask.id);
+            if (originalTask) onTaskClick(originalTask);
+          }
+        }}
         columnWidth={60}
         listCellWidth="200px"
         rowHeight={50}

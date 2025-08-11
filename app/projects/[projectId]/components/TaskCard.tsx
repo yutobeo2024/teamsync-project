@@ -14,9 +14,10 @@ interface Task {
 interface TaskCardProps {
   task: Task;
   index: number;
+  onTaskClick?: (task: Task) => void;
 }
 
-export default function TaskCard({ task, index }: TaskCardProps) {
+export default function TaskCard({ task, index, onTaskClick }: TaskCardProps) {
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
     try {
@@ -57,6 +58,15 @@ export default function TaskCard({ task, index }: TaskCardProps) {
               : '0 2px 4px rgba(0,0,0,0.1)',
             cursor: 'grab',
             transition: snapshot.isDragging ? 'none' : 'box-shadow 0.2s ease',
+            position: 'relative',
+          }}
+          onClick={(e) => {
+            // Prevent click from interfering with drag operations
+            if (!snapshot.isDragging && onTaskClick) {
+              // Stop propagation to prevent drag start
+              e.stopPropagation();
+              onTaskClick(task);
+            }
           }}
         >
           <div style={{ marginBottom: '8px' }}>

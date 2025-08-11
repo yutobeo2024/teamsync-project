@@ -16,9 +16,10 @@ interface KanbanColumnProps {
   columnId: string;
   title: string;
   tasks: Task[];
+  onTaskClick?: (task: Task) => void;
 }
 
-export default function KanbanColumn({ columnId, title, tasks }: KanbanColumnProps) {
+export default function KanbanColumn({ columnId, title, tasks, onTaskClick }: KanbanColumnProps) {
   const getColumnColor = (title: string) => {
     const colors: { [key: string]: { bg: string; border: string; header: string } } = {
       'To Do': { bg: '#fff3cd', border: '#ffeaa7', header: '#856404' },
@@ -112,6 +113,7 @@ export default function KanbanColumn({ columnId, title, tasks }: KanbanColumnPro
                 key={task.id}
                 task={task}
                 index={index}
+                onTaskClick={onTaskClick}
               />
             ))}
             {provided.placeholder}

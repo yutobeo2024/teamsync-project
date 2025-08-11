@@ -17,9 +17,10 @@ interface KanbanBoardProps {
   projectId: string;
   initialTasks: Task[];
   initialColumns: string[];
+  onTaskClick?: (task: Task) => void;
 }
 
-export default function KanbanBoard({ projectId, initialTasks, initialColumns }: KanbanBoardProps) {
+export default function KanbanBoard({ projectId, initialTasks, initialColumns, onTaskClick }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [columns, setColumns] = useState<string[]>(initialColumns);
   const [loading, setLoading] = useState(false);
@@ -178,6 +179,7 @@ export default function KanbanBoard({ projectId, initialTasks, initialColumns }:
               columnId={columnId}
               title={columnId}
               tasks={getTasksForColumn(columnId)}
+              onTaskClick={onTaskClick}
             />
           ))}
         </div>

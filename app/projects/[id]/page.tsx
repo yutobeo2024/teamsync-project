@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
-import KanbanBoard from "./components/KanbanBoard";
-import GanttChart from "./components/GanttChart";
+import KanbanBoard from "../[projectId]/components/KanbanBoard";
+import GanttChart from "../[projectId]/components/GanttChart";
+import TaskDetailsModal from "./components/TaskDetailsModal";
 
 interface Project {
   id: string;
@@ -39,6 +40,19 @@ export default function ProjectDetailsPage() {
   const [tasksError, setTasksError] = useState("");
   const [showProjectInfo, setShowProjectInfo] = useState(false);
   const [viewMode, setViewMode] = useState<'kanban' | 'gantt'>('kanban');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+
+  // Simple notification system
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const showSuccess = (message: string) => {
+    setNotification({ type: 'success', message });
+    setTimeout(() => setNotification(null), 4000);
+  };
+  const showError = (message: string) => {
+    setNotification({ type: 'error', message });
+    setTimeout(() => setNotification(null), 5000);
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -150,8 +164,35 @@ export default function ProjectDetailsPage() {
     );
   }
 
+  // Helper to merge updated task into list
+  const mergeUpdatedTask = (list: Task[], updated: Task) =>
+    list.map((t) => (t.id === updated.id ? { ...t, ...updated } : t));
+
   return (
     <div style={{ maxWidth: "100%", margin: "auto", padding: 32 }}>
+      {/* Notification Toast */}
+      {notification && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: 16,
+            right: 16,
+            zIndex: 2000,
+            padding: "12px 16px",
+            borderRadius: 8,
+            border: `1px solid ${notification.type === 'error' ? '#f5c6cb' : '#c3e6cb'}`,
+            backgroundColor: notification.type === 'error' ? '#f8d7da' : '#d4edda',
+            color: notification.type === 'error' ? '#721c24' : '#155724',
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            maxWidth: 360
+          }}
+        >
+          {notification.message}
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ margin: 0, marginBottom: 8 }}>{project.projectName}</h1>
@@ -373,27 +414,86 @@ export default function ProjectDetailsPage() {
                 projectId={project.id}
                 initialTasks={tasks}
                 initialColumns={columns}
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setIsTaskModalOpen(true);
+                }}
               />
             ) : (
               <GanttChart 
                 tasks={tasks}
                 onTaskChange={(task) => {
                   console.log('Task changed:', task);
-                  // TODO: Implement task update functionality
                 }}
                 onProgressChange={(task) => {
                   console.log('Progress changed:', task);
-                  // TODO: Implement progress update functionality
                 }}
                 onDateChange={(task) => {
                   console.log('Date changed:', task);
-                  // TODO: Implement date update functionality
+                }}
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setIsTaskModalOpen(true);
                 }}
               />
             )}
           </>
         )}
       </div>
+
+      <TaskDetailsModal
+        task={selectedTask}
+        isOpen={isTaskModalOpen}
+        availableStatuses={columns}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setSelectedTask(null);
+        }}
+        onSave={async (updatedTask) => {
+          // Optimistic update: close quickly via immediate resolve; background sync + rollback on error
+          const prevTasks = tasks;
+          const optimisticTasks = mergeUpdatedTask(tasks, updatedTask);
+          setTasks(optimisticTasks);
+
+          // Build payload
+          const payload: any = {
+            taskId: updatedTask.id,
+            taskName: updatedTask.taskName,
+            description: updatedTask.description,
+            assigneeEmail: updatedTask.assigneeEmail,
+            newStatus: updatedTask.status,
+            dueDate: updatedTask.dueDate,
+          };
+          if (updatedTask.startDate) payload.startDate = updatedTask.startDate;
+          if (typeof updatedTask.progress === 'number') payload.progress = updatedTask.progress;
+
+          // Background API call
+          (async () => {
+            try {
+              const res = await fetch(`/api/projects/${project.id}/tasks`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                throw new Error(data.error || 'Failed to update task');
+              }
+              // Reconcile with server response
+              const serverTask = data.task as Task;
+              setTasks((current) => mergeUpdatedTask(current, serverTask));
+              showSuccess('Task saved');
+            } catch (e: any) {
+              // Rollback on failure
+              setTasks(prevTasks);
+              showError(e?.message || 'Failed to save task');
+            }
+          })();
+
+          // Resolve immediately so modal can close optimistically
+          return;
+        }}
+      />
     </div>
   );
 }

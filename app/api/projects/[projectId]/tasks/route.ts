@@ -90,10 +90,35 @@ export async function PUT(req: NextRequest, { params }: { params: { projectId: s
   }
 
   try {
-    const { taskId, newStatus } = await req.json();
+    const { taskId, newStatus, taskName, description, assigneeEmail, dueDate, startDate, progress } = await req.json();
     
-    if (!taskId || !newStatus) {
-      return NextResponse.json({ error: "Task ID and new status are required" }, { status: 400 });
+    if (!taskId) {
+      return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
+    }
+    
+    // At least one field to update must be provided
+    if (newStatus === undefined && 
+        taskName === undefined && 
+        description === undefined && 
+        assigneeEmail === undefined && 
+        dueDate === undefined && 
+        startDate === undefined && 
+        progress === undefined) {
+      return NextResponse.json({ error: "At least one field to update must be provided" }, { status: 400 });
+    }
+    
+    // Validate progress if provided
+    if (progress !== undefined && (isNaN(progress) || progress < 0 || progress > 100)) {
+      return NextResponse.json({ error: "Progress must be a number between 0 and 100" }, { status: 400 });
+    }
+    
+    // Validate dates if provided
+    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      return NextResponse.json({ error: "Due date must be in YYYY-MM-DD format" }, { status: 400 });
+    }
+    
+    if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      return NextResponse.json({ error: "Start date must be in YYYY-MM-DD format" }, { status: 400 });
     }
 
     // Verify user has access to this project
@@ -135,18 +160,105 @@ export async function PUT(req: NextRequest, { params }: { params: { projectId: s
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Update the status column (column E, index 4)
+    // Prepare updates for each field that was provided
     const actualRowIndex = taskRowIndex + 2; // +2 for header and 0-indexing
-    await sheets.spreadsheets.values.update({
+    const updates = [];
+    
+    // Map of field names to column letters
+    const columnMap = {
+      taskName: 'B',
+      description: 'C',
+      assigneeEmail: 'D',
+      status: 'E',
+      dueDate: 'F',
+      startDate: 'G',
+      progress: 'H'
+    };
+    
+    // Add updates for each provided field
+    if (taskName !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.taskName}${actualRowIndex}`,
+        values: [[taskName]]
+      });
+    }
+    
+    if (description !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.description}${actualRowIndex}`,
+        values: [[description]]
+      });
+    }
+    
+    if (assigneeEmail !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.assigneeEmail}${actualRowIndex}`,
+        values: [[assigneeEmail]]
+      });
+    }
+    
+    if (newStatus !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.status}${actualRowIndex}`,
+        values: [[newStatus]]
+      });
+    }
+    
+    if (dueDate !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.dueDate}${actualRowIndex}`,
+        values: [[dueDate]]
+      });
+    }
+    
+    if (startDate !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.startDate}${actualRowIndex}`,
+        values: [[startDate]]
+      });
+    }
+    
+    if (progress !== undefined) {
+      updates.push({
+        range: `Tasks!${columnMap.progress}${actualRowIndex}`,
+        values: [[progress]]
+      });
+    }
+    
+    // Execute all updates in batch
+    const batchUpdateRequests = updates.map(update => ({
+      range: update.range,
+      values: update.values
+    }));
+    
+    await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: project.linkedSheetId,
-      range: `Tasks!E${actualRowIndex}`,
-      valueInputOption: 'RAW',
       requestBody: {
-        values: [[newStatus]],
-      },
+        valueInputOption: 'RAW',
+        data: batchUpdateRequests
+      }
     });
 
-    return NextResponse.json({ success: true, taskId, newStatus });
+    // Fetch the updated task to return
+    const updatedTaskResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: project.linkedSheetId,
+      range: `Tasks!A${actualRowIndex}:H${actualRowIndex}`,
+    });
+    
+    const updatedTaskRow = updatedTaskResponse.data.values?.[0] || [];
+    const updatedTask = {
+      id: updatedTaskRow[0] || '',
+      taskName: updatedTaskRow[1] || '',
+      description: updatedTaskRow[2] || '',
+      assigneeEmail: updatedTaskRow[3] || '',
+      status: updatedTaskRow[4] || '',
+      dueDate: updatedTaskRow[5] || '',
+      startDate: updatedTaskRow[6] || '',
+      progress: updatedTaskRow[7] ? parseInt(updatedTaskRow[7]) || 0 : 0,
+      rowIndex: actualRowIndex
+    };
+
+    return NextResponse.json({ success: true, task: updatedTask });
   } catch (error) {
     console.error("Error updating task:", error);
     return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
