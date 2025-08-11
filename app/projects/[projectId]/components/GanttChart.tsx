@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo } from "react";
-import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react";
-import "gantt-task-react/dist/index.css";
+import { Gantt, Task as GanttTask, ViewMode } from "@wamra/gantt-task-react";
+import "@wamra/gantt-task-react/dist/style.css";
 
 interface Task {
   id: string;
