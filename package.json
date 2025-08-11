@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/uuid": "^10.0.0",
