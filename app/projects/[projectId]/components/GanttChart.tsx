@@ -141,7 +141,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
   };
 
   const handleDateChange = (task: GanttTask) => {
-    if (onDateChange) {
+    if (
+      onDateChange &&
+      task.start !== undefined &&
+      task.end !== undefined &&
+      typeof task.progress === "number"
+    ) {
       onDateChange(task);
     }
   };
